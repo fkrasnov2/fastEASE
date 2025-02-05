@@ -144,76 +144,17 @@ class Model:
 
 
 class Metrics:
-    """inspired via implicit"""
-    def _take_tails(self, arr, n, return_complement=False, shuffled=False) -> np.array:
 
-        idx = arr.argsort()
-        sorted_arr = arr[idx]
+    def random_split(self, interactions_matrix: csr_matrix, k: int = 2) -> tuple[csr_matrix, csr_matrix]:
+        """randomly choose k items (columns) as test, and erase them from train matrix"""
+        user_num, item_num = interactions_matrix.shape
+        train_items = np.random.randint(0, item_num, size=k)
+        train = interactions_matrix.tolil()
+        train[:, train_items] = 0
 
-        end = np.bincount(sorted_arr).cumsum() - 1
-        start = end - n
-        ranges = np.linspace(start, end, num=n + 1, dtype=int)[1:]
+        test = interactions_matrix[:, train_items]
 
-        if shuffled:
-            shuffled_idx = (sorted_arr + np.random.random(arr.shape)).argsort()
-            tails = shuffled_idx[np.ravel(ranges, order="f")]
-        else:
-            tails = np.ravel(ranges, order="f")
-
-        heads = np.setdiff1d(idx, tails)
-
-        if return_complement:
-            return idx[tails], idx[heads]
-
-        return idx[tails]
-
-    def leave_k_out_split(self, interactions_matrix: csr_matrix, k: int = 2) -> tuple[csr_matrix, csr_matrix]:
-        interactions_matrix = interactions_matrix.tocoo()
-
-        users = interactions_matrix.row
-        items = interactions_matrix.col
-        data = interactions_matrix.data
-
-        unique_users, counts = np.unique(users, return_counts=True)
-
-        # get only users with n + 1 interactions
-        candidate_mask = counts > k + 1
-
-        # get unique users who appear in the test set
-        unique_candidate_users = unique_users[candidate_mask]
-        full_candidate_mask = np.isin(users, unique_candidate_users)
-
-        # get all users, items and interactions_matrix that match specified requirements to be
-        # included in test set.
-        candidate_users = users[full_candidate_mask]
-        candidate_items = items[full_candidate_mask]
-        candidate_data = data[full_candidate_mask]
-
-        test_idx, train_idx = self._take_tails(candidate_users, k, shuffled=True, return_complement=True)
-
-        # get all remaining remaining candidate user-item pairs, and prepare to append to
-        # training set.
-        train_idx = np.setdiff1d(np.arange(len(candidate_users), dtype=int), test_idx)
-
-        # build test matrix
-        test_users = candidate_users[test_idx]
-        test_items = candidate_items[test_idx]
-        test_data = candidate_data[test_idx]
-        test_mat = csr_matrix(
-            (test_data, (test_users, test_items)), shape=interactions_matrix.shape, dtype=interactions_matrix.dtype
-        )
-
-        # build training matrix
-        train_users = np.r_[users[~full_candidate_mask], candidate_users[train_idx]]
-        train_items = np.r_[items[~full_candidate_mask], candidate_items[train_idx]]
-        train_data = np.r_[data[~full_candidate_mask], candidate_data[train_idx]]
-        train_mat = csr_matrix(
-            (train_data, (train_users, train_items)),
-            shape=interactions_matrix.shape,
-            dtype=interactions_matrix.dtype,
-        )
-
-        return train_mat, test_mat
+        return train.tocsr(), test
 
 
 class PipelineEASE:
@@ -237,12 +178,12 @@ class PipelineEASE:
 
         if calc_ndcg_at_k:
             metrics = Metrics()
-            train, test = metrics.leave_k_out_split(self._dataset.interactions_matrix, k=k)
+            train, test = metrics.random_split(self._dataset.interactions_matrix, k=k)
             model = Model(train, regularization=regularization)
             prediction = model.predict_next_n(
                 interactions_matrix=train, prediction_batch_size=prediction_batch_size, next_n=k
             )
-            self._ndcg = ndcg_score(test.toarray()[:, :k], prediction, k=k)
+            self._ndcg = ndcg_score(test.toarray(), prediction, k=k)
 
         if predict_next_n:
             model = Model(self._dataset.interactions_matrix, regularization=regularization)
