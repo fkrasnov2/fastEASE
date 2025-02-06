@@ -8,7 +8,7 @@ This issue is addressed in the current project by leveraging CUDA, a powerful te
 
 ## Framework
 
-[![Framework](https://github.com/fkrasnov2/fastEASE/fastEASEv2.png)
+[![Framework](https://github.com/fkrasnov2/fastEASE/blob/main/fastEASEv2.png)
 
 ## Structure
 
