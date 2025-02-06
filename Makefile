@@ -14,7 +14,7 @@ SCRIPTS=scripts
 	mkdir ${REPORTS}
 
 .venv:
-	poetry install -E all --no-root
+	poetry install --all-extras --no-root
 
 install: .venv .reports
 
