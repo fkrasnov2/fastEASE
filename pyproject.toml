@@ -75,5 +75,5 @@ target-version = ["py310", "py311", "py312"]
 [build-system]
 #requires = ["poetry-core"]
 #build-backend = "poetry.core.masonry.api"
-requires = ["wheel", "build", "setuptools;>=64"] # REQUIRED if [build-system] table is used
+requires = ["wheel", "build", "setuptools"] # REQUIRED if [build-system] table is used
 build-backend = "setuptools.build_meta" # If not defined, then legacy behavior can happen.
