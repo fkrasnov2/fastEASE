@@ -183,7 +183,9 @@ class PipelineEASE:
             prediction = model.predict_next_n(
                 interactions_matrix=train, prediction_batch_size=prediction_batch_size, next_n=k
             )
-            self._ndcg = ndcg_score(test.toarray(), prediction, k=k)
+            test_user_sums = test.sum(axis=1).A.ravel()
+            test_user_idxs = np.argwhere(test_user_sums != 0).ravel()
+            self._ndcg = ndcg_score(test[test_user_idxs].toarray(), prediction[test_user_idxs], k=k)
 
         if predict_next_n:
             model = Model(self._dataset.interactions_matrix, regularization=regularization)
