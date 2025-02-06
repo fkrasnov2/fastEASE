@@ -6,6 +6,9 @@
 One challenge is that the matrix inversion process becomes computationally intensive, requiring significant processing time on the central processing unit (CPU).
 This issue is addressed in the current project by leveraging CUDA, a powerful technology specifically designed for parallel processing. The key distinction is that this solution is intended not for research purposes but rather for deployment in production environments.
 
+## Framework
+
+[![Framework](https://github.com/fkrasnov2/fastEASE/fastEASEv2.png)
 
 ## Structure
 
@@ -42,12 +45,6 @@ Tested on `Ubuntu 24.04 LTS` and `Debian 12`. But the template should work on ot
     ```
 
 ### Development Workflow Management
-
-```sh
-# See the help for available commands
-make help
-```
-
 ```sh
 # Run the unit tests
 make test
