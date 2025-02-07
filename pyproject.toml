@@ -42,7 +42,6 @@ packages = [
 python = ">=3.10, <3.13"
 scipy = "^1.15.1"
 cupy-cuda12x = "^13.3.0"
-ipython = "^8.32.0"
 tqdm = "^4.67.1"
 scikit-learn = "^1.6.1"
 
