@@ -147,7 +147,7 @@ class Metrics:
 
     def random_split(self, interactions_matrix: csr_matrix, k: int = 2) -> tuple[csr_matrix, csr_matrix]:
         """randomly choose k items (columns) as test, and erase them from train matrix"""
-        user_num, item_num = interactions_matrix.shape
+        _, item_num = interactions_matrix.shape
         train_items = np.random.randint(0, item_num, size=k)
         train = interactions_matrix.tolil()
         train[:, train_items] = 0
@@ -155,6 +155,8 @@ class Metrics:
         test = interactions_matrix[:, train_items]
 
         return train.tocsr(), test
+
+    # def leave_k_last_split(self, interactions_matrix: csr_matrix, k: int = 2) -> tuple[csr_matrix, csr_matrix]:
 
 
 class PipelineEASE:
@@ -170,6 +172,7 @@ class PipelineEASE:
         predict_next_n: bool = True,
         next_n: int = 3,
         regularization: int = 100,
+        return_items: bool = False
     ) -> None:
         """Init and pipeline execution"""
 
@@ -194,9 +197,10 @@ class PipelineEASE:
                 prediction_batch_size=prediction_batch_size,
                 next_n=next_n,
             )
-            inferenced_items = self._dataset.items_vocab[prediction]
+            if return_items : 
+                prediction = self._dataset.items_vocab[prediction]
             users = np.array(self._dataset.users_vocab).reshape((-1, 1))
-            self._prediction = np.hstack((users, inferenced_items))
+            self._prediction = np.hstack((users, prediction))
 
     @property
     def ndcg(self) -> float:
