@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fastEASE"
-version = "0.1.0"
+version = "0.3.0"
 description = "An easy-to-use Python library for building EASE recommendation systems with CUDA"
 license = "Apache-2.0"
 authors = [
@@ -72,7 +72,7 @@ target-version = ["py310", "py311", "py312"]
 
 
 [build-system]
-#requires = ["poetry-core"]
-#build-backend = "poetry.core.masonry.api"
-requires = ["wheel", "build", "setuptools"] # REQUIRED if [build-system] table is used
-build-backend = "setuptools.build_meta" # If not defined, then legacy behavior can happen.
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+#requires = ["wheel", "build", "setuptools"] # REQUIRED if [build-system] table is used
+#build-backend = "setuptools.build_meta" # If not defined, then legacy behavior can happen.
