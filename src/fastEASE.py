@@ -28,7 +28,7 @@ class Dataset:
         max_user_interactions_len: int = 32,
     ) -> None:
         """Create a dataset from list of interactions (user, item)"""
-        self.user_item_it = user_item_it
+        self._user_item_it = user_item_it
         self.min_item_freq = min_item_freq
         self.min_user_interactions_len = min_user_interactions_len
         self.max_user_interactions_len = max_user_interactions_len
