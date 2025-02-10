@@ -61,10 +61,10 @@ class Dataset:
         """
         user_history = defaultdict(list)
         vocab = defaultdict(int)
-        if not isinstance(self.user_item_it, Iterable):
+        if not isinstance(self._user_item_it, Iterable):
             raise ValueError("user_item_it is not iterable")
 
-        for user_id, item_id in tqdm(self.user_item_it):
+        for user_id, item_id in tqdm(self._user_item_it):
             user_history[user_id].append(item_id)
             vocab[item_id] += 1
 
