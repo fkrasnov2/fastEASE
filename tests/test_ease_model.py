@@ -1,6 +1,6 @@
 """Tests for module.py"""
 
-from src.fastEASE import PipelineEASE
+from fastEASE import PipelineEASE
 
 
 def test_ease_class() -> None:
