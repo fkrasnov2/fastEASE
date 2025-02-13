@@ -19,12 +19,6 @@ jobs:
       with:
         python-version: '3.x'
     - name: Install build dependencies
-      run: python -m pip install -U setuptools wheel build poetry 
-    - name: Build
-      run: python -m build .
-    # - name: Publish
-    #   uses: pypa/gh-action-pypi-publish@release/v1
-    #   with:
-    #     skip-existing: true
+      run: make install 
     - name: Test
       run: make test

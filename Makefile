@@ -14,79 +14,46 @@ SCRIPTS=scripts
 	mkdir ${REPORTS}
 
 .venv:
-	poetry install --all-extras --no-root
+	python3 -m venv .venv
+	. .venv/bin/activate
+.base:
+	pip install -U pip setuptools build wheel
+.main:
+	pip install -r requirements.txt
 
-install: .venv .reports
+.extras:
+	pip install -U isort black ruff pytest pytest-cov
+
+install: .venv .reports .base .main .extras
 
 
 # Linters
 
 .isort:
-	poetry run isort --check ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
+	isort ${SOURCES} ${TESTS}
 
 .black:
-	poetry run black --check --diff ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
+	black ${SOURCES} ${TESTS} 
 
-.pylint:
-	poetry run pylint --jobs 4 ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
+.ruff:
+	ruff check --fix ${SOURCES} ${TESTS}
 
-.mypy:
-	poetry run mypy ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-.flake8:
-	poetry run flake8 ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-.bandit:
-	poetry run bandit -q -c bandit.yml -r ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-.codespell:
-	poetry run codespell ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-
-# Fixers & formatters
-
-.isort_fix:
-	poetry run isort ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-.autopep8_fix:
-	poetry run autopep8 --in-place -r ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-.black_fix:
-	poetry run black -q  ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-
-# Tests
+.assets:
+	test -d dataset || mkdir dataset
+	test -s dataset/ml-1m.zip  || wget --no-check-certificate https://files.grouplens.org/datasets/movielens/ml-1m.zip -O dataset/ml-1m.zip
+	test -d dataset/ml-1m  || unzip dataset/ml-1m.zip -d dataset/
 
 .pytest:
-	poetry run pytest ${TESTS} --cov=${SOURCES} --cov-report=xml
+	pytest ${TESTS} --cov=${TESTS} --cov-report=xml
 
-
-coverage: .venv .reports
-	poetry run coverage run --source ${SOURCES} --module pytest
-	poetry run coverage report
-	poetry run coverage html -d ${REPORTS}/coverage_html
-	poetry run coverage xml -o ${REPORTS}/coverage.xml -i
-
-
-# Generalization
-
-.format: .isort_fix .autopep8_fix .black_fix
-format: .venv .format
-
-.lint: .isort .black .codespell  .pylint .bandit
+.lint: .isort .black .ruff
 lint: .venv .lint
 
-.test: .pytest
-test: .venv .test
+.test: .assets .pytest
+test: .test
 
-
-# Copyright
-
-copyright:
-	poetry run python -m scripts.copyright --check ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
-
-copyright_fix:
-	poetry run python -m scripts.copyright ${SOURCES} ${TESTS} ${SCRIPTS} ${BENCHMARK}
+build: 
+	python -m build .
 
 
 # Cleaning
@@ -97,5 +64,6 @@ clean:
 	rm -rf ${REPORTS}
 	find . -type d -name '.mypy_cache' -exec rm -rf {} +
 	find . -type d -name '*pytest_cache*' -exec rm -rf {} +
+	rm -rf dataset/*
 
 reinstall: clean install

@@ -1,1 +1,1 @@
-from .fastEASE import Model, Metrics, Dataset
+from .fastEASE import Model, Metrics, Dataset, PipelineEASE
