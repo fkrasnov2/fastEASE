@@ -1,4 +1,6 @@
 """Tests for module.py"""
+import sys
+sys.path.append("src")
 
 from fastEASE import PipelineEASE
 
