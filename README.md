@@ -22,12 +22,14 @@ This issue is addressed in the current project by leveraging CUDA, a powerful te
 - `pyproject.toml`: PyPi's configuration file.
 
 ## Getting Started
-``sh
+bash:
+```console
 pip install fastEASE
 mkdir dataset
+wget --no-check-certificate https://files.grouplens.org/datasets/movielens/ml-1m.zip -O dataset/ml-1m.zip
 unzip dataset/ml-1m.zip -d dataset/
 ```
-
+python:
 ```python
 k = 5
 pipeline = PipelineEASE(
@@ -43,12 +45,11 @@ pipeline = PipelineEASE(
 )
 print(f"nDCG@{k} = {pipeline.ndcg:.4}")
 
-``
+```
 
 ### Prerequisites
 
 - `Python` >= 3.10
-- `Poetry` (should work with `uv` as well)
 - `GNU Make`
 
 Tested on `Ubuntu 24.04 LTS` and `Debian 12`. But the template should work on other operating systems as well.
@@ -56,6 +57,7 @@ Tested on `Ubuntu 24.04 LTS` and `Debian 12`. But the template should work on ot
 ### Setting Things Up
 
 1. **Clone the repository**:
+
     ```sh
     git clone https://github.com/fkrasnov2/fastEASE
     cd fastEASE
