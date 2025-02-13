@@ -44,12 +44,12 @@ install: .venv .reports .base .main .extras
 	test -d dataset/ml-1m  || unzip dataset/ml-1m.zip -d dataset/
 
 .pytest:
-	pytest ${TESTS} --cov=${TESTS} --cov-report=xml
+	pytest ${TESTS}
 
 .lint: .isort .black .ruff
 lint: .venv .lint
 
-.test: .assets .pytest
+.test: .assets .extras .pytest
 test: .test
 
 build: 
