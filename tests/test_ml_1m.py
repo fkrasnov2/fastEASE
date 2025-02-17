@@ -2,9 +2,11 @@ import sys
 
 sys.path.append("src")
 
-from fastEASE import Dataset, PipelineEASE
-import pytest
 from collections.abc import Iterable
+
+import pytest
+
+from fastEASE import Dataset, PipelineEASE
 
 
 class DatasetML1M(Dataset):

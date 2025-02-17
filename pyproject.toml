@@ -1,6 +1,6 @@
 [project]
 name = "fastEASE"
-version = "0.3.2"
+version = "0.3.3"
 description = "An easy-to-use Python library for building EASE recommendation systems with CUDA"
 license = {file = "LICENSE"}
 

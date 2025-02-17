@@ -86,8 +86,17 @@ class Dataset:
         )
 
         print(f"FILTERED : {len(user_history)=}")
-        cv = CountVectorizer(lowercase=False, tokenizer=lambda items: items, token_pattern=None, dtype=np.int32)
-        return cv.fit_transform(list(user_history.values())), list(user_history.keys()), cv.get_feature_names_out()
+        cv = CountVectorizer(
+            lowercase=False,
+            tokenizer=lambda items: items,
+            token_pattern=None,
+            dtype=np.int32,
+        )
+        return (
+            cv.fit_transform(list(user_history.values())),
+            list(user_history.keys()),
+            cv.get_feature_names_out(),
+        )
 
 
 class Model:
@@ -130,12 +139,18 @@ class Model:
 
         for batch_index in tqdm(range(0, users_number, prediction_batch_size)):
             interaction_batch = cp.array(
-                interactions_matrix[batch_index : batch_index + prediction_batch_size].toarray()
+                interactions_matrix[
+                    batch_index : batch_index + prediction_batch_size
+                ].toarray()
             )
-            predicted_batch = cp.argsort(interaction_batch.dot(self.weights_matrix))[:, -next_n:]
+            predicted_batch = cp.argsort(interaction_batch.dot(self.weights_matrix))[
+                :, -next_n:
+            ]
             del interaction_batch
             inferenced_item_ids_list.append(
-                predicted_batch.get() if not isinstance(predicted_batch, np.ndarray) else predicted_batch
+                predicted_batch.get()
+                if not isinstance(predicted_batch, np.ndarray)
+                else predicted_batch
             )
         inferenced_item_ids = np.vstack(inferenced_item_ids_list)
         print(f"predict finished: {time.perf_counter() - start_time}")
@@ -145,7 +160,9 @@ class Model:
 
 class Metrics:
 
-    def random_split(self, interactions_matrix: csr_matrix, k: int = 2) -> tuple[csr_matrix, csr_matrix]:
+    def random_split(
+        self, interactions_matrix: csr_matrix, k: int = 2
+    ) -> tuple[csr_matrix, csr_matrix]:
         """randomly choose k items (columns) as test, and erase them from train matrix"""
         _, item_num = interactions_matrix.shape
         train_items = np.random.randint(0, item_num, size=k)
@@ -156,20 +173,23 @@ class Metrics:
 
         return train.tocsr(), test
 
-def leave_k_last_split(self, interactions_matrix: csr_matrix, k: int = 2) -> tuple[csr_matrix, csr_matrix]:
+
+def leave_k_last_split(
+    self, interactions_matrix: csr_matrix, k: int = 2
+) -> tuple[csr_matrix, csr_matrix]:
     """For each user, leave the last k interacted items as test data, removing them from the training matrix."""
     # Convert to LIL format for efficient row manipulations
     train = interactions_matrix.tolil()
     num_users, num_items = train.shape
     test = lil_matrix((num_users, num_items), dtype=interactions_matrix.dtype)
-    
+
     for user in tqdm(range(num_users)):
         cols = train.rows[user]
         data = train.data[user]
         num_interactions = len(cols)
         if num_interactions == 0:
             continue  # No interactions to split
-        
+
         # Determine the number of items to move to test (up to k)
         # So one can use another rule instead of 0
         # e.g:
@@ -177,19 +197,19 @@ def leave_k_last_split(self, interactions_matrix: csr_matrix, k: int = 2) -> tup
         #     split = num_interactions // 2
         # split = max(1, split)
         split = max(0, num_interactions - k)
-        
+
         # Split the indices and data
         train_cols = cols[:split]
         train_data = data[:split]
         test_cols = cols[split:]
         test_data = data[split:]
-        
+
         # Update the train and test matrices
         train.rows[user] = train_cols
         train.data[user] = train_data
         test.rows[user] = test_cols
         test.data[user] = test_data
-    
+
     # Convert back to CSR format before returning
     return train.tocsr(), test.tocsr()
 
@@ -207,11 +227,16 @@ class PipelineEASE:
         predict_next_n: bool = True,
         next_n: int = 3,
         regularization: int = 100,
-        return_items: bool = False
+        return_items: bool = False,
     ) -> None:
         """Init and pipeline execution"""
 
-        self._dataset = Dataset(user_item_it, min_item_freq, min_user_interactions_len, max_user_interactions_len)
+        self._dataset = Dataset(
+            user_item_it,
+            min_item_freq,
+            min_user_interactions_len,
+            max_user_interactions_len,
+        )
         print(f"{self._dataset.interactions_matrix.shape=}")
 
         if calc_ndcg_at_k:
@@ -219,20 +244,26 @@ class PipelineEASE:
             train, test = metrics.random_split(self._dataset.interactions_matrix, k=k)
             model = Model(train, regularization=regularization)
             prediction = model.predict_next_n(
-                interactions_matrix=train, prediction_batch_size=prediction_batch_size, next_n=k
+                interactions_matrix=train,
+                prediction_batch_size=prediction_batch_size,
+                next_n=k,
             )
             test_user_sums = test.sum(axis=1).A.ravel()
             test_user_idxs = np.argwhere(test_user_sums != 0).ravel()
-            self._ndcg = ndcg_score(test[test_user_idxs].toarray(), prediction[test_user_idxs], k=k)
+            self._ndcg = ndcg_score(
+                test[test_user_idxs].toarray(), prediction[test_user_idxs], k=k
+            )
 
         if predict_next_n:
-            model = Model(self._dataset.interactions_matrix, regularization=regularization)
+            model = Model(
+                self._dataset.interactions_matrix, regularization=regularization
+            )
             prediction = model.predict_next_n(
                 interactions_matrix=self._dataset.interactions_matrix,
                 prediction_batch_size=prediction_batch_size,
                 next_n=next_n,
             )
-            if return_items : 
+            if return_items:
                 prediction = self._dataset.items_vocab[prediction]
             users = np.array(self._dataset.users_vocab).reshape((-1, 1))
             self._prediction = np.hstack((users, prediction))
