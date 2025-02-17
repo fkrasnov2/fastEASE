@@ -53,8 +53,9 @@ lint: .venv .lint
 test: .test
 
 build: 
-	python -m build .
-
+	rm -f dist/*
+        python -m build .
+        twine upload dist/fast*
 
 # Cleaning
 
