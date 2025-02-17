@@ -54,8 +54,8 @@ test: .test
 
 build: 
 	rm -f dist/*
-        python -m build .
-        twine upload dist/fast*
+	python -m build .
+	twine upload dist/fast*
 
 # Cleaning
 
