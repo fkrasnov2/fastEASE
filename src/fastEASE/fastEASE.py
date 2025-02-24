@@ -20,18 +20,14 @@ except Exception:
 
 
 class Dataset:
-    def __init__(
-        self,
-        user_item_it: Iterable[tuple[str, str]],
-        min_item_freq: int = 3,
-        min_user_interactions_len: int = 3,
-        max_user_interactions_len: int = 32,
-    ) -> None:
-        """Create a dataset from list of interactions (user, item)"""
-        self._user_item_it = user_item_it
-        self.min_item_freq = min_item_freq
-        self.min_user_interactions_len = min_user_interactions_len
-        self.max_user_interactions_len = max_user_interactions_len
+    def __init__(self, **kwargs) : 
+        """
+        Create a dataset from list of interactions (user, item)
+        """
+        self._user_item_it : Iterable[tuple[str, str]]  = kwargs.get("user_item_it", [])
+        self.min_item_freq : int =  kwargs.get("min_item_freq", 3)
+        self.min_user_interactions_len : int = kwargs.get("min_user_interactions_len", 3)
+        self.max_user_interactions_len : int = kwargs.get("max_user_interactions_len", 32)
         self._interactions_matrix, self._users_vocab, self._items_vocab = (
             self._convert_user_item_list_to_interactions_matrix()
         )
@@ -231,42 +227,30 @@ class Model:
 
 
 class PipelineEASE(Dataset):
-    def __init__(
-        self,
-        user_item_it: Iterable[tuple[str, str]],
-        min_item_freq: int = 3,
-        min_user_interactions_len: int = 3,
-        max_user_interactions_len: int = 32,
-    ) -> None:
+    def __init__(self, **kwargs):
         """Init and pipeline execution"""
-        super().__init__(
-            user_item_it,
-            min_item_freq,
-            min_user_interactions_len,
-            max_user_interactions_len,
-        )
-        
+        super().__init__(**kwargs)
         print(f"{self.interactions_matrix.shape=}")
 
     def calc_ndcg_at_k(self, k : int = 3, regularization : int = 100, prediction_batch_size : int = 1000, ) -> dict:
-            train, test = self.leave_k_last_split(self.interactions_matrix, k=k)
-            model = Model(train, regularization=regularization)
-            prediction = model.predict_next_n(
-                interactions_matrix=train,
-                prediction_batch_size=prediction_batch_size,
-                next_n=k,
-            )
-            return self.metrics(test, prediction, k)
+        train, test = self.leave_k_last_split(self.interactions_matrix, k=k)
+        model = Model(train, regularization=regularization)
+        prediction = model.predict_next_n(
+            interactions_matrix=train,
+            prediction_batch_size=prediction_batch_size,
+            next_n=k,
+        )
+        return self.metrics(test, prediction, k)
 
     def predict_next_n(self,  next_n : int = 3, return_items : bool = False, prediction_batch_size : int = 1000, regularization : int = 100 ) -> np.array:
-            model = Model(self.interactions_matrix, regularization=regularization)
-            prediction = model.predict_next_n(
-                interactions_matrix=self.interactions_matrix,
-                prediction_batch_size=prediction_batch_size,
-                next_n=next_n,
-            )
-            if return_items:
-                prediction = self.items_vocab[prediction]
-            users = np.array(self.users_vocab).reshape((-1, 1))
-            return np.hstack((users, prediction))
+        model = Model(self.interactions_matrix, regularization=regularization)
+        prediction = model.predict_next_n(
+            interactions_matrix=self.interactions_matrix,
+            prediction_batch_size=prediction_batch_size,
+            next_n=next_n,
+        )
+        if return_items:
+            prediction = self.items_vocab[prediction]
+        users = np.array(self.users_vocab).reshape((-1, 1))
+        return np.hstack((users, prediction))
 
