@@ -173,7 +173,6 @@ class Metrics:
 
         return train.tocsr(), test
 
-
     def leave_k_last_split(
         self, interactions_matrix: csr_matrix, k: int = 2
     ) -> tuple[csr_matrix, csr_matrix]:
@@ -249,11 +248,21 @@ class PipelineEASE:
                 next_n=k,
             )
 
-            score = np.squeeze(np.asarray(1 * ( test == prediction )))
+            score = np.squeeze(np.asarray(1 * (test == prediction)))
             y_score = score.copy()
             score.sort(axis=1)
             y_true = np.fliplr(score)
-            self._ndcg = ndcg_score( y_true, y_score, k=k ).item()
+            self._ndcg = ndcg_score(y_true, y_score, k=k).item()
+
+            # calc diversity ratio
+            distinct_inference_size = np.nonzero(prediction.sum(axis=0))[0].shape[0]
+            distinct_test_size = np.nonzero(test.sum(axis=0))[0].shape[0]
+            diversity_ratio = 1.0 * distinct_inference_size / distinct_test_size
+            self._metrics = {
+                f"nDCG@{k}": f"{self._ndcg:.4f}",
+                "distinct_inference_size": distinct_inference_size,
+                "diversity_ratio": f"{diversity_ratio:.4f}",
+            }
 
         if predict_next_n:
             model = Model(
