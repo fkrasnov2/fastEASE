@@ -86,17 +86,69 @@ class Dataset:
         )
 
         print(f"FILTERED : {len(user_history)=}")
-        cv = CountVectorizer(
+        self.cv = CountVectorizer(
             lowercase=False,
             tokenizer=lambda items: items,
             token_pattern=None,
             dtype=np.int32,
         )
         return (
-            cv.fit_transform(list(user_history.values())),
+            self.cv.fit_transform(list(user_history.values())),
             list(user_history.keys()),
-            cv.get_feature_names_out(),
+            self.cv.get_feature_names_out(),
         )
+
+    def random_split(
+        self, interactions_matrix: csr_matrix, k: int = 2
+    ) -> tuple[csr_matrix, csr_matrix]:
+        """randomly choose k items (columns) as test, and erase them from train matrix"""
+        _, item_num = interactions_matrix.shape
+        train_items = np.random.randint(0, item_num, size=k)
+        train = interactions_matrix.tolil()
+        train[:, train_items] = 0
+
+        test = interactions_matrix[:, train_items]
+
+        return train.tocsr(), test
+
+    def leave_k_last_split(
+        self, interactions_matrix: csr_matrix, k: int = 2
+    ) -> tuple[csr_matrix, csr_matrix]:
+        """For each user, leave the last k interacted items as test data, removing them from the training matrix."""
+        # Convert to LIL format for efficient row manipulations
+        train = interactions_matrix.tolil()
+        num_users, num_items = train.shape
+        test = lil_matrix((num_users, num_items), dtype=interactions_matrix.dtype)
+
+        for user in tqdm(range(num_users)):
+            cols = train.rows[user]
+            data = train.data[user]
+            num_interactions = len(cols)
+            if num_interactions == 0:
+                continue  # No interactions to split
+
+            # Determine the number of items to move to test (up to k)
+            # So one can use another rule instead of 0
+            # e.g:
+            # if num_interactions < k:
+            #     split = num_interactions // 2
+            # split = max(1, split)
+            split = max(0, num_interactions - k)
+
+            # Split the indices and data
+            train_cols = cols[:split]
+            train_data = data[:split]
+            test_cols = cols[split:]
+            test_data = data[split:]
+
+            # Update the train and test matrices
+            train.rows[user] = train_cols
+            train.data[user] = train_data
+            test.rows[user] = test_cols
+            test.data[user] = test_data
+
+        # Convert back to CSR format before returning
+        return train.tocsr(), test.tocsr()
 
 
 class Model:
@@ -158,62 +210,7 @@ class Model:
         return inferenced_item_ids
 
 
-class Metrics:
-
-    def random_split(
-        self, interactions_matrix: csr_matrix, k: int = 2
-    ) -> tuple[csr_matrix, csr_matrix]:
-        """randomly choose k items (columns) as test, and erase them from train matrix"""
-        _, item_num = interactions_matrix.shape
-        train_items = np.random.randint(0, item_num, size=k)
-        train = interactions_matrix.tolil()
-        train[:, train_items] = 0
-
-        test = interactions_matrix[:, train_items]
-
-        return train.tocsr(), test
-
-    def leave_k_last_split(
-        self, interactions_matrix: csr_matrix, k: int = 2
-    ) -> tuple[csr_matrix, csr_matrix]:
-        """For each user, leave the last k interacted items as test data, removing them from the training matrix."""
-        # Convert to LIL format for efficient row manipulations
-        train = interactions_matrix.tolil()
-        num_users, num_items = train.shape
-        test = lil_matrix((num_users, num_items), dtype=interactions_matrix.dtype)
-
-        for user in tqdm(range(num_users)):
-            cols = train.rows[user]
-            data = train.data[user]
-            num_interactions = len(cols)
-            if num_interactions == 0:
-                continue  # No interactions to split
-
-            # Determine the number of items to move to test (up to k)
-            # So one can use another rule instead of 0
-            # e.g:
-            # if num_interactions < k:
-            #     split = num_interactions // 2
-            # split = max(1, split)
-            split = max(0, num_interactions - k)
-
-            # Split the indices and data
-            train_cols = cols[:split]
-            train_data = data[:split]
-            test_cols = cols[split:]
-            test_data = data[split:]
-
-            # Update the train and test matrices
-            train.rows[user] = train_cols
-            train.data[user] = train_data
-            test.rows[user] = test_cols
-            test.data[user] = test_data
-
-        # Convert back to CSR format before returning
-        return train.tocsr(), test.tocsr()
-
-
-class PipelineEASE:
+class PipelineEASE(Dataset):
     def __init__(
         self,
         user_item_it: Iterable[tuple[str, str]],
@@ -229,18 +226,16 @@ class PipelineEASE:
         return_items: bool = False,
     ) -> None:
         """Init and pipeline execution"""
-
-        self._dataset = Dataset(
+        super().__init__(
             user_item_it,
             min_item_freq,
             min_user_interactions_len,
             max_user_interactions_len,
         )
-        print(f"{self._dataset.interactions_matrix.shape=}")
+        print(f"{self.interactions_matrix.shape=}")
 
         if calc_ndcg_at_k:
-            metrics = Metrics()
-            train, test = metrics.random_split(self._dataset.interactions_matrix, k=k)
+            train, test = self.leave_k_last_split(self.interactions_matrix, k=k)
             model = Model(train, regularization=regularization)
             prediction = model.predict_next_n(
                 interactions_matrix=train,
@@ -248,15 +243,16 @@ class PipelineEASE:
                 next_n=k,
             )
 
-            score = np.squeeze(np.asarray(1 * (test == prediction)))
+            prediction_csr = self.cv.transform(prediction)
+            score = ~(test != prediction_csr).toarray() * 1
             y_score = score.copy()
             score.sort(axis=1)
             y_true = np.fliplr(score)
             self._ndcg = ndcg_score(y_true, y_score, k=k).item()
 
             # calc diversity ratio
-            distinct_inference_size = np.nonzero(prediction.sum(axis=0))[0].shape[0]
-            distinct_test_size = np.nonzero(test.sum(axis=0))[0].shape[0]
+            distinct_inference_size = np.unique(prediction.ravel()).shape[0]
+            distinct_test_size = np.unique(test.indices).shape[0]
             diversity_ratio = 1.0 * distinct_inference_size / distinct_test_size
             self._metrics = {
                 f"nDCG@{k}": f"{self._ndcg:.4f}",
@@ -265,17 +261,15 @@ class PipelineEASE:
             }
 
         if predict_next_n:
-            model = Model(
-                self._dataset.interactions_matrix, regularization=regularization
-            )
+            model = Model(self.interactions_matrix, regularization=regularization)
             prediction = model.predict_next_n(
-                interactions_matrix=self._dataset.interactions_matrix,
+                interactions_matrix=self.interactions_matrix,
                 prediction_batch_size=prediction_batch_size,
                 next_n=next_n,
             )
             if return_items:
-                prediction = self._dataset.items_vocab[prediction]
-            users = np.array(self._dataset.users_vocab).reshape((-1, 1))
+                prediction = self.items_vocab[prediction]
+            users = np.array(self.users_vocab).reshape((-1, 1))
             self._prediction = np.hstack((users, prediction))
 
     @property
@@ -285,7 +279,3 @@ class PipelineEASE:
     @property
     def prediction(self) -> np.array:
         return self._prediction
-
-    @property
-    def dataset(self) -> Dataset:
-        return self._dataset
