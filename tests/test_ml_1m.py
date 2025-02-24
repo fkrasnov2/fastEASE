@@ -6,12 +6,15 @@ from collections.abc import Iterable
 
 import pytest
 
-from fastEASE import Dataset, PipelineEASE
+from fastEASE import PipelineEASE
 
 
-class DatasetML1M(Dataset):
-    def __init__(self, path_to_dataset: str):
-        super().__init__(self.load_interactions(path_to_dataset))
+class PipelineML1M(PipelineEASE):
+    def __init__(self, path_to_dataset: str, **kwargs):
+        kwargs.update(
+            {"user_item_it": self.load_interactions(path_to_dataset)}
+        )
+        super().__init__(**kwargs)
 
     @staticmethod
     def load_interactions(path_to_dataset) -> Iterable[tuple[int, int]]:
@@ -22,33 +25,31 @@ class DatasetML1M(Dataset):
 
 
 @pytest.fixture
-def dataset_ml_1m():
-    return DatasetML1M("dataset/ml-1m")
+def pipeline_ml_1m():
+    return PipelineML1M("dataset/ml-1m")
 
 
-def test_items_vocab(dataset_ml_1m):
-    assert len(dataset_ml_1m.items_vocab) > 1000
+def test_items_vocab(pipeline_ml_1m):
+    assert len(pipeline_ml_1m.items_vocab) > 1000
 
 
-def test_users_vocab(dataset_ml_1m):
-    assert len(dataset_ml_1m.users_vocab) > 500
+def test_users_vocab(pipeline_ml_1m):
+    assert len(pipeline_ml_1m.users_vocab) > 500
 
 
-def test_interactions_matrix(dataset_ml_1m):
-    assert dataset_ml_1m.interactions_matrix.shape == (
-        len(dataset_ml_1m.users_vocab),
-        len(dataset_ml_1m.items_vocab),
+def test_interactions_matrix(pipeline_ml_1m):
+    assert pipeline_ml_1m.interactions_matrix.shape == (
+        len(pipeline_ml_1m.users_vocab),
+        len(pipeline_ml_1m.items_vocab),
     )
 
 
 def test_ndcg():
-    pipeline = PipelineEASE(
-        user_item_it=DatasetML1M.load_interactions("dataset/ml-1m"),
+    pipeline = PipelineML1M(
+        "dataset/ml-1m",
         min_item_freq=1,
         min_user_interactions_len=5,
         max_user_interactions_len=32,
-        calc_ndcg_at_k=True,
-        k=5,
-        predict_next_n=False,
     )
-    assert pipeline.ndcg > 0.01
+    metrics = pipeline.calc_ndcg_at_k(k=5)
+    assert metrics["nDCG@5"] > 0.01

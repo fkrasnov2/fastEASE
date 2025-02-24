@@ -150,7 +150,27 @@ class Dataset:
         # Convert back to CSR format before returning
         return train.tocsr(), test.tocsr()
 
+    def metrics(self, test : csr_matrix, prediction :  np.array, k : int) -> dict:
+        prediction_csr = self.cv.transform(prediction)
+        score = ~(test != prediction_csr).toarray() * 1
+        y_score = score.copy()
+        score.sort(axis=1)
+        y_true = np.fliplr(score)
+        ndcg = ndcg_score(y_true, y_score, k=k).item()
 
+        # calc diversity ratio
+        distinct_inference_size = np.unique(prediction.ravel()).shape[0]
+        distinct_test_size = np.unique(test.indices).shape[0]
+        diversity_ratio = 1.0 * distinct_inference_size / distinct_test_size
+        self._metrics = {
+            f"nDCG@{k}": ndcg,
+            "distinct_inference_size": distinct_inference_size,
+            "diversity_ratio": diversity_ratio,
+        }
+
+        return self._metrics
+
+        
 class Model:
     def __init__(self, interactions_matrix: csr_matrix, regularization: float) -> None:
         self._regularization = regularization
@@ -214,16 +234,9 @@ class PipelineEASE(Dataset):
     def __init__(
         self,
         user_item_it: Iterable[tuple[str, str]],
-        calc_ndcg_at_k: bool = False,
-        k: int = 3,
         min_item_freq: int = 3,
         min_user_interactions_len: int = 3,
         max_user_interactions_len: int = 32,
-        prediction_batch_size: int = 1000,
-        predict_next_n: bool = True,
-        next_n: int = 3,
-        regularization: int = 100,
-        return_items: bool = False,
     ) -> None:
         """Init and pipeline execution"""
         super().__init__(
@@ -232,9 +245,10 @@ class PipelineEASE(Dataset):
             min_user_interactions_len,
             max_user_interactions_len,
         )
+        
         print(f"{self.interactions_matrix.shape=}")
 
-        if calc_ndcg_at_k:
+    def calc_ndcg_at_k(self, k : int = 3, regularization : int = 100, prediction_batch_size : int = 1000, ) -> dict:
             train, test = self.leave_k_last_split(self.interactions_matrix, k=k)
             model = Model(train, regularization=regularization)
             prediction = model.predict_next_n(
@@ -242,25 +256,9 @@ class PipelineEASE(Dataset):
                 prediction_batch_size=prediction_batch_size,
                 next_n=k,
             )
+            return self.metrics(test, prediction, k)
 
-            prediction_csr = self.cv.transform(prediction)
-            score = ~(test != prediction_csr).toarray() * 1
-            y_score = score.copy()
-            score.sort(axis=1)
-            y_true = np.fliplr(score)
-            self._ndcg = ndcg_score(y_true, y_score, k=k).item()
-
-            # calc diversity ratio
-            distinct_inference_size = np.unique(prediction.ravel()).shape[0]
-            distinct_test_size = np.unique(test.indices).shape[0]
-            diversity_ratio = 1.0 * distinct_inference_size / distinct_test_size
-            self._metrics = {
-                f"nDCG@{k}": f"{self._ndcg:.4f}",
-                "distinct_inference_size": distinct_inference_size,
-                "diversity_ratio": f"{diversity_ratio:.4f}",
-            }
-
-        if predict_next_n:
+    def predict_next_n(self,  next_n : int = 3, return_items : bool = False, prediction_batch_size : int = 1000, regularization : int = 100 ) -> np.array:
             model = Model(self.interactions_matrix, regularization=regularization)
             prediction = model.predict_next_n(
                 interactions_matrix=self.interactions_matrix,
@@ -270,12 +268,5 @@ class PipelineEASE(Dataset):
             if return_items:
                 prediction = self.items_vocab[prediction]
             users = np.array(self.users_vocab).reshape((-1, 1))
-            self._prediction = np.hstack((users, prediction))
+            return np.hstack((users, prediction))
 
-    @property
-    def ndcg(self) -> float:
-        return self._ndcg
-
-    @property
-    def prediction(self) -> np.array:
-        return self._prediction
