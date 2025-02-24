@@ -155,7 +155,7 @@ class Dataset:
         ndcg = ndcg_score(y_true, y_score, k=k).item()
 
         # calc diversity ratio
-        distinct_inference_size = np.unique(prediction.ravel()).shape[0]
+        distinct_inference_size = np.unique(prediction_csr.indices).shape[0]
         distinct_test_size = np.unique(test.indices).shape[0]
         diversity_ratio = 1.0 * distinct_inference_size / distinct_test_size
         self._metrics = {
