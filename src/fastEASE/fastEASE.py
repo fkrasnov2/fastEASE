@@ -174,44 +174,44 @@ class Metrics:
         return train.tocsr(), test
 
 
-def leave_k_last_split(
-    self, interactions_matrix: csr_matrix, k: int = 2
-) -> tuple[csr_matrix, csr_matrix]:
-    """For each user, leave the last k interacted items as test data, removing them from the training matrix."""
-    # Convert to LIL format for efficient row manipulations
-    train = interactions_matrix.tolil()
-    num_users, num_items = train.shape
-    test = lil_matrix((num_users, num_items), dtype=interactions_matrix.dtype)
+    def leave_k_last_split(
+        self, interactions_matrix: csr_matrix, k: int = 2
+    ) -> tuple[csr_matrix, csr_matrix]:
+        """For each user, leave the last k interacted items as test data, removing them from the training matrix."""
+        # Convert to LIL format for efficient row manipulations
+        train = interactions_matrix.tolil()
+        num_users, num_items = train.shape
+        test = lil_matrix((num_users, num_items), dtype=interactions_matrix.dtype)
 
-    for user in tqdm(range(num_users)):
-        cols = train.rows[user]
-        data = train.data[user]
-        num_interactions = len(cols)
-        if num_interactions == 0:
-            continue  # No interactions to split
+        for user in tqdm(range(num_users)):
+            cols = train.rows[user]
+            data = train.data[user]
+            num_interactions = len(cols)
+            if num_interactions == 0:
+                continue  # No interactions to split
 
-        # Determine the number of items to move to test (up to k)
-        # So one can use another rule instead of 0
-        # e.g:
-        # if num_interactions < k:
-        #     split = num_interactions // 2
-        # split = max(1, split)
-        split = max(0, num_interactions - k)
+            # Determine the number of items to move to test (up to k)
+            # So one can use another rule instead of 0
+            # e.g:
+            # if num_interactions < k:
+            #     split = num_interactions // 2
+            # split = max(1, split)
+            split = max(0, num_interactions - k)
 
-        # Split the indices and data
-        train_cols = cols[:split]
-        train_data = data[:split]
-        test_cols = cols[split:]
-        test_data = data[split:]
+            # Split the indices and data
+            train_cols = cols[:split]
+            train_data = data[:split]
+            test_cols = cols[split:]
+            test_data = data[split:]
 
-        # Update the train and test matrices
-        train.rows[user] = train_cols
-        train.data[user] = train_data
-        test.rows[user] = test_cols
-        test.data[user] = test_data
+            # Update the train and test matrices
+            train.rows[user] = train_cols
+            train.data[user] = train_data
+            test.rows[user] = test_cols
+            test.data[user] = test_data
 
-    # Convert back to CSR format before returning
-    return train.tocsr(), test.tocsr()
+        # Convert back to CSR format before returning
+        return train.tocsr(), test.tocsr()
 
 
 class PipelineEASE:
