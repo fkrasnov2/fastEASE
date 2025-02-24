@@ -248,11 +248,12 @@ class PipelineEASE:
                 prediction_batch_size=prediction_batch_size,
                 next_n=k,
             )
-            test_user_sums = test.sum(axis=1).A.ravel()
-            test_user_idxs = np.argwhere(test_user_sums != 0).ravel()
-            self._ndcg = ndcg_score(
-                test[test_user_idxs].toarray(), prediction[test_user_idxs], k=k
-            )
+
+            score = np.squeeze(np.asarray(1 * ( test == prediction )))
+            y_score = score.copy()
+            score.sort(axis=1)
+            y_true = np.fliplr(score)
+            self._ndcg = ndcg_score( y_true, y_score, k=k ).item()
 
         if predict_next_n:
             model = Model(
