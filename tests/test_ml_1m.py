@@ -11,9 +11,7 @@ from fastEASE import PipelineEASE
 
 class PipelineML1M(PipelineEASE):
     def __init__(self, path_to_dataset: str, **kwargs):
-        kwargs.update(
-            {"user_item_it": self.load_interactions(path_to_dataset)}
-        )
+        kwargs.update({"user_item_it": self.load_interactions(path_to_dataset)})
         super().__init__(**kwargs)
 
     @staticmethod
@@ -50,6 +48,19 @@ def test_ndcg():
         min_item_freq=1,
         min_user_interactions_len=5,
         max_user_interactions_len=32,
+        leave_k_out=2,
     )
-    metrics = pipeline.calc_ndcg_at_k(k=5)
-    assert metrics["nDCG@5"] > 0.01
+    metrics = pipeline.calc_ndcg_at_k(pipeline.leave_k_out)
+    assert metrics["cover_ratio"] > 0.1
+
+
+def test_cover_ratio():
+    pipeline = PipelineML1M(
+        "dataset/ml-1m",
+        min_item_freq=1,
+        min_user_interactions_len=5,
+        max_user_interactions_len=32,
+        leave_k_out=2,
+    )
+    metrics = pipeline.calc_ndcg_at_k(pipeline.leave_k_out)
+    assert metrics["cover_ratio"] > 0.4

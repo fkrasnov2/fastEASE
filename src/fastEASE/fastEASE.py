@@ -20,16 +20,26 @@ except Exception:
 
 
 class Dataset:
-    def __init__(self, **kwargs) : 
+    def __init__(self, **kwargs):
         """
         Create a dataset from list of interactions (user, item)
         """
-        self._user_item_it : Iterable[tuple[str, str]]  = kwargs.get("user_item_it", [])
-        self.min_item_freq : int =  kwargs.get("min_item_freq", 3)
-        self.min_user_interactions_len : int = kwargs.get("min_user_interactions_len", 3)
-        self.max_user_interactions_len : int = kwargs.get("max_user_interactions_len", 32)
-        self._interactions_matrix, self._users_vocab, self._items_vocab = (
-            self._convert_user_item_list_to_interactions_matrix()
+        self._user_item_it: Iterable[tuple[str, str]] = kwargs.get("user_item_it", [])
+        self.min_item_freq: int = kwargs.get("min_item_freq", 3)
+        self.min_user_interactions_len: int = kwargs.get("min_user_interactions_len", 3)
+        self.max_user_interactions_len: int = kwargs.get(
+            "max_user_interactions_len", 32
+        )
+        self.leave_k_out = kwargs.get("leave_k_out", 0)
+        # processes
+        (
+            self._cv,
+            self._interactions_matrix,
+            self._leave_k_out_matrix,
+            self._users_vocab,
+            self._items_vocab,
+        ) = self._convert_user_history_to_interactions_matrix(
+            self._make_user_history(), self.leave_k_out
         )
 
     @property
@@ -37,36 +47,50 @@ class Dataset:
         return self._items_vocab
 
     @property
-    def users_vocab(self) -> list:
+    def users_vocab(self) -> np.array:
         return self._users_vocab
 
     @property
     def interactions_matrix(self) -> csr_matrix:
         return self._interactions_matrix
 
-    def _convert_user_item_list_to_interactions_matrix(self) -> None:
+    @property
+    def leave_k_out_matrix(self) -> np.array:
+        return self._leave_k_out_matrix
+
+    def _make_user_history(
+        self,
+    ) -> dict[str, list]:
         """
-        Convert list of tuples (user_id,item_id) to interactions matrix with users x items.
+        Convert list of tuples (user,item) to user history dict  {user: items}.
         Filter out low freq items aka "long tail".
         Filter short interactions sequences.
-        Save interaction_matrix to class instance property.
 
         Returns
         -------
-        None
+        dict {user:items}
         """
         user_history = defaultdict(list)
         vocab = defaultdict(int)
+
         if not isinstance(self._user_item_it, Iterable):
             raise ValueError("user_item_it is not iterable")
 
-        for user_id, item_id in tqdm(self._user_item_it):
-            user_history[user_id].append(item_id)
-            vocab[item_id] += 1
+        for user, item in tqdm(self._user_item_it):
+            items = user_history.get(user, [])
 
+            if len(items) == 0:
+                user_history[user] = [item]
+                vocab[item] += 1
+
+            elif items[-1] != item:  # protect from repeets
+                user_history[user].append(item)
+                vocab[item] += 1
+
+        # min frequency vocab filter
         vocab = dict(filter(lambda item: item[1] >= self.min_item_freq, vocab.items()))
-
         print(f"ALL : {len(user_history)=}")
+
         user_history = dict(
             filter(
                 lambda item: len(item[1]) >= self.min_user_interactions_len
@@ -82,16 +106,73 @@ class Dataset:
         )
 
         print(f"FILTERED : {len(user_history)=}")
-        self.cv = CountVectorizer(
+        return user_history
+
+    def _convert_user_history_to_interactions_matrix(
+        self, user_history: dict, leave_k_out: int
+    ) -> tuple[CountVectorizer, csr_matrix, np.array, np.array, np.array]:
+        """
+        Convert dict of user histories to csr_matrix (interaction matrix).
+        If leave_k_out > 0 create leave_k_out_matrix with the same shape containing last k items from each user history.
+
+        Returns
+        -------
+
+        CountVectorizer object
+        interactions_matrix -- sparse interactions matrix,
+        leave_k_out_matrix -- np.array with shape (users,leave_k_out)
+        user2id, item2id -- np.arrays with users and items from axis of interactions_matrix
+
+        """
+        _vocab = set()
+        _users = []
+        train_user_history = []
+        test_user_history = []
+
+        for user, items in user_history.items():
+            if len(set(items)) < leave_k_out * 2:
+                continue
+
+            _users.append(user)
+            if leave_k_out > 0:
+                test_user_history.append(items[-leave_k_out:])
+                train_user_history.append(items[:-leave_k_out])
+            else:
+                train_user_history.append(items)
+            _vocab.update(items)
+
+        assert len(_users) == len(set(_users))
+        user2id = {user: idx for idx, user in enumerate(_users)}
+
+        ## Tokenization
+        item2id = {item: idx for idx, item in enumerate(_vocab)}
+        train_items = []
+        test_items = []
+
+        if leave_k_out > 0:
+            for train, test in zip(train_user_history, test_user_history):
+                train_items.append(list(map(lambda item: item2id[item], train)))
+                test_items.append(list(map(lambda item: item2id[item], test)))
+        else:
+            for train in train_user_history:
+                train_items.append(list(map(lambda item: item2id[item], train)))
+
+        print(f"{len(train_items)=} {len(test_items)=}")
+
+        cv = CountVectorizer(
             lowercase=False,
             tokenizer=lambda items: items,
             token_pattern=None,
             dtype=np.int32,
+            vocabulary=list(range(len(item2id))),
         )
+
         return (
-            self.cv.fit_transform(list(user_history.values())),
-            list(user_history.keys()),
-            self.cv.get_feature_names_out(),
+            cv,
+            cv.transform(train_items),
+            np.array(test_items),
+            np.array(list(user2id.keys())),
+            np.array(list(item2id.keys())),
         )
 
     def random_split(
@@ -107,7 +188,7 @@ class Dataset:
 
         return train.tocsr(), test
 
-    def leave_k_last_split(
+    def sparse_leave_k_last_split(
         self, interactions_matrix: csr_matrix, k: int = 2
     ) -> tuple[csr_matrix, csr_matrix]:
         """For each user, leave the last k interacted items as test data, removing them from the training matrix."""
@@ -146,27 +227,34 @@ class Dataset:
         # Convert back to CSR format before returning
         return train.tocsr(), test.tocsr()
 
-    def metrics(self, test : csr_matrix, prediction :  np.array, k : int) -> dict:
-        prediction_csr = self.cv.transform(prediction)
-        score = ~(test != prediction_csr).toarray() * 1
+
+class Metrics(Dataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def ndcg(self, test: np.array, prediction: np.array, k: int) -> dict[str, float]:
+        k = k or test.shape[1]
+        score = (test[:, :k] == prediction[:, :k]) * 1
         y_score = score.copy()
         score.sort(axis=1)
         y_true = np.fliplr(score)
-        ndcg = ndcg_score(y_true, y_score, k=k).item()
+        return {f"nDCG@{k}": ndcg_score(y_true, y_score, k=k).item()}
 
-        # calc diversity ratio
-        distinct_inference_size = np.unique(prediction_csr.indices).shape[0]
-        distinct_test_size = np.unique(test.indices).shape[0]
-        diversity_ratio = 1.0 * distinct_inference_size / distinct_test_size
-        self._metrics = {
-            f"nDCG@{k}": ndcg,
+    def cover_ratio(self, test: np.array, prediction: np.array) -> dict[str, float]:
+        """
+        calc cover ratio
+        """
+        distinct_inference_size = np.unique(prediction.ravel()).shape[0]
+        distinct_test_size = np.unique(test.ravel()).shape[0]
+        cover_ratio = 1.0 * distinct_inference_size / distinct_test_size
+        metrics = {
             "distinct_inference_size": distinct_inference_size,
-            "diversity_ratio": diversity_ratio,
+            "cover_ratio": cover_ratio,
         }
 
-        return self._metrics
+        return metrics
 
-        
+
 class Model:
     def __init__(self, interactions_matrix: csr_matrix, regularization: float) -> None:
         self._regularization = regularization
@@ -226,23 +314,36 @@ class Model:
         return inferenced_item_ids
 
 
-class PipelineEASE(Dataset):
+class PipelineEASE(Metrics):
     def __init__(self, **kwargs):
         """Init and pipeline execution"""
         super().__init__(**kwargs)
         print(f"{self.interactions_matrix.shape=}")
 
-    def calc_ndcg_at_k(self, k : int = 3, regularization : int = 100, prediction_batch_size : int = 1000, ) -> dict:
-        train, test = self.leave_k_last_split(self.interactions_matrix, k=k)
-        model = Model(train, regularization=regularization)
+    def calc_ndcg_at_k(
+        self,
+        k: int = 3,
+        regularization: int = 100,
+        prediction_batch_size: int = 1000,
+    ) -> dict:
+        model = Model(self.interactions_matrix, regularization=regularization)
         prediction = model.predict_next_n(
-            interactions_matrix=train,
+            interactions_matrix=self.interactions_matrix,
             prediction_batch_size=prediction_batch_size,
             next_n=k,
         )
-        return self.metrics(test, prediction, k)
 
-    def predict_next_n(self,  next_n : int = 3, return_items : bool = False, prediction_batch_size : int = 1000, regularization : int = 100 ) -> np.array:
+        ndcg = self.ndcg(self.leave_k_out_matrix, prediction, k)
+        cover_ratio = self.cover_ratio(self.leave_k_out_matrix, prediction)
+        return {**ndcg, **cover_ratio}
+
+    def predict_next_n(
+        self,
+        next_n: int = 5,
+        return_items: bool = False,
+        prediction_batch_size: int = 1000,
+        regularization: int = 100,
+    ) -> np.array:
         model = Model(self.interactions_matrix, regularization=regularization)
         prediction = model.predict_next_n(
             interactions_matrix=self.interactions_matrix,
@@ -251,6 +352,5 @@ class PipelineEASE(Dataset):
         )
         if return_items:
             prediction = self.items_vocab[prediction]
-        users = np.array(self.users_vocab).reshape((-1, 1))
+        users = self.users_vocab.reshape((-1, 1))
         return np.hstack((users, prediction))
-
