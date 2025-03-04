@@ -166,7 +166,7 @@ class Dataset:
             dtype=np.int32,
             vocabulary=list(range(len(item2id))),
         )
-
+        cv.fit(train_items)
         return (
             cv,
             cv.transform(train_items),

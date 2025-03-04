@@ -17,12 +17,12 @@ SCRIPTS=scripts
 	python3 -m venv .venv
 	. .venv/bin/activate
 .base:
-	pip install -U pip setuptools build wheel
+	. .venv/bin/activate && pip install -U pip setuptools build wheel twine
 .main:
-	pip install -r requirements.txt
+	. .venv/bin/activate && pip install -r requirements.txt
 
 .extras:
-	pip install -U isort black ruff pytest pytest-cov
+	. .venv/bin/activate && pip install -U isort black ruff pytest pytest-cov
 
 install: .venv .reports .base .main .extras
 
@@ -30,13 +30,13 @@ install: .venv .reports .base .main .extras
 # Linters
 
 .isort:
-	isort ${SOURCES} ${TESTS}
+	. .venv/bin/activate && isort ${SOURCES} ${TESTS}
 
 .black:
-	black ${SOURCES} ${TESTS} 
+	. .venv/bin/activate && black ${SOURCES} ${TESTS} 
 
 .ruff:
-	ruff check --fix ${SOURCES} ${TESTS}
+	. .venv/bin/activate && ruff check --fix ${SOURCES} ${TESTS}
 
 .assets:
 	test -d dataset || mkdir dataset
@@ -44,7 +44,7 @@ install: .venv .reports .base .main .extras
 	test -d dataset/ml-1m  || unzip dataset/ml-1m.zip -d dataset/
 
 .pytest:
-	pytest ${TESTS}
+	. .venv/bin/activate && pytest ${TESTS}
 
 .lint: .isort .black .ruff
 lint: .venv .lint
@@ -54,8 +54,7 @@ test: .test
 
 build: 
 	rm -f dist/*
-	python -m build .
-	twine upload dist/fast*
+	. .venv/bin/activate && ( python -m build . ;  twine upload dist/fast*)
 
 # Cleaning
 
